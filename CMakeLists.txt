@@ -51,6 +51,7 @@ list(TRANSFORM KERNEL_INCLUDE PREPEND -I)
 list(TRANSFORM KERNEL_DEF PREPEND -D)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/xnl_kernel.ll
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/xnl_kernel.c
   COMMAND ${CLANG_COMPILER}
   ${KERNEL_INCLUDE} ${KERNEL_DEF}
   -target bpf
@@ -68,15 +69,14 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/xnl_kernel.o
   COMMAND ${LLVM_COMPILER}
   -march=bpf -filetype=obj -o ${CMAKE_CURRENT_BINARY_DIR}/xnl_kernel.o
   ${CMAKE_CURRENT_BINARY_DIR}/xnl_kernel.ll
-  DEPENDS xnl_kernel_ll
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/xnl_kernel.ll
   )
 
-add_custom_target(xnl_kernel_o ALL DEPENDS xnl_kernel.o)
+add_custom_target(xnl_kernel ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/xnl_kernel.o)
 
-add_dependencies(xnl_kernel_o
-  xnl_kernel_ll)
+#add_dependencies(xnl_kernel xnl_kernel_ll)
 
-add_custom_target(xnl_kernel ALL DEPENDS xnl_kernel_o)
+#add_custom_target(xnl_kernel ALL DEPENDS xnl_kernel_o)
 
 # user-space
 
