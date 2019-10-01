@@ -13,6 +13,8 @@
 #include "bpf_helpers.h"
 #include "common.h"
 
+char _license[] SEC("license") = "Dual MIT/GPL";
+
 #define DEBUG 1
 #ifdef  DEBUG
 /* Only use this for debug output. Notice output from bpf_trace_printk()
@@ -29,18 +31,23 @@
 #endif
 
 struct bpf_map_def SEC("maps") xnl_rules = {
-        .type = BPF_MAP_TYPE_ARRAY,
+        .type = BPF_MAP_TYPE_PERCPU_ARRAY,
         .key_size = sizeof(__u32),
-        .value_size = sizeof(struct xnl_filters),
-        .max_entries = 1,
+//        .value_size = sizeof(struct xnl_filters),
+//        .max_entries = 1,
+        .value_size = sizeof(struct xnl_filter),
+        .max_entries = XNL_MAX_FILTERS,
+
 };
 
+#if 0
 struct bpf_map_def SEC("maps") xnl_counters = {
         .type = BPF_MAP_TYPE_PERCPU_ARRAY,
         .key_size = sizeof(__u32),
         .value_size = sizeof(struct xnl_counters),
         .max_entries = XNL_MAX_FILTERS,
 };
+#endif
 
 SEC("xdp")
 int xdp_pass (struct xdp_md *ctx)
@@ -53,17 +60,17 @@ int xdp_pass (struct xdp_md *ctx)
         __u16 eth_proto;
         __u8 proto;
         __u8 iph_len;
-        __u32 zero = 0;
+        //__u32 zero = 0;
 
         struct iphdr *iph;
         struct ethhdr *ehdr;
-        struct xnl_filters *filters;
+//        struct xnl_filters *filters;
 
         len = data_end - data;
         ehdr = (struct ethhdr *)data;
         l3_offset = sizeof(*ehdr);
 
-        if ((void *)ehdr + l3_offset > data_end) {
+        if ((void *)ehdr + sizeof(*ehdr) + l3_offset > data_end) {
                 bpf_debug("Failed to parse Ethernet header");
                 return XDP_PASS; /* XDP_ABORTED? */
         }
@@ -87,64 +94,81 @@ int xdp_pass (struct xdp_md *ctx)
                 return XDP_PASS;
         }
 
+        __u32 saddr = iph->saddr;
+        __u32 daddr = iph->daddr;
+        __u16 sport = 0;
+        __u16 dport = 0;
+
         l4_offset = l3_offset + sizeof(*iph);
 
+#if 0
         filters = bpf_map_lookup_elem(&xnl_rules, &zero);
 
         if (!filters) {
                 bpf_debug("bpf_map_lookup_elem(rules) failed");
                 return XDP_PASS;
         }
+#endif
+
+        if (data + l4_offset > data_end) {
+                bpf_debug("l4_offset > data_end");
+                return XDP_PASS; /* XXX */
+        }
+
+        if (proto == XNL_FILTER_TCP) {
+                struct tcphdr *hdr = data + l4_offset;
+
+                if ((void *)hdr + sizeof(*hdr) > data_end) {
+                        bpf_debug("l4_offset check");
+                        return XDP_PASS;
+                }
+
+                sport = ntohs(hdr->source);
+                dport = ntohs(hdr->dest);
+        } else {
+                /* UDP */
+                struct udphdr *hdr = data + l4_offset;
+
+                if ((void *)hdr + sizeof(*hdr) > data_end) {
+                        bpf_debug("l4_offset check");
+                        return XDP_PASS;
+                }
+
+                sport = ntohs(hdr->source);
+                dport = ntohs(hdr->dest);
+        }
 
 #pragma clang loop unroll(full)
         for (__u8 i = 0; i < XNL_MAX_FILTERS; i++) {
-                struct xnl_filter *filter = &(filters->filters[i]);
+                __u32 j = i; /* to unroll */
 
-                if (i > filters->num-1)
-                        break;
+                struct xnl_filter *filter = bpf_map_lookup_elem(&xnl_rules, &j);
+
+                if (!filter) {
+                        bpf_debug("bpf_map_lookup_elem(xnl_rules)");
+                        return XDP_PASS;
+                }
+
+                if (filter->is_set == 0) break;
 
                 if (proto != XNL_FILTER_ANY && proto != filter->proto)
                         continue;
 
-                if (filter->saddr != 0 && iph->saddr != filter->saddr)
+                if (filter->saddr != 0 && saddr != filter->saddr)
                         continue;
 
-                if (filter->daddr != 0 && iph->daddr != filter->daddr)
+                if (filter->daddr != 0 && daddr != filter->daddr)
+                        continue;
+
+                if (filter->sport != 0 && sport != filter->sport)
+                        continue;
+
+                if (filter->dport != 0 && dport != filter->dport)
                         continue;
 
 
-                if (filter->sport != 0 || filter->dport != 0) {
-                        if (iph->protocol == IPPROTO_TCP) {
-                                struct tcphdr *hdr = data + l4_offset;
-
-                                if (filter->sport && filter->sport != ntohs(hdr->source))
-                                        continue;
-
-                                if (filter->dport && filter->dport != ntohs(hdr->dest))
-                                        continue;
-                        } else if (iph->protocol == IPPROTO_UDP) {
-                                struct udphdr *hdr = data + l4_offset;
-
-                                if (filter->sport && filter->sport != ntohs(hdr->source))
-                                        continue;
-
-                                if (filter->dport && filter->dport != ntohs(hdr->dest))
-                                        continue;
-                        }
-                }
-
-                int j = i; /* to be able to unroll */
-
-                struct xnl_counters *counters = bpf_map_lookup_elem(&xnl_counters, &j);
-
-                if (!counters) {
-                        bpf_debug("bpf_map_lookup_elem(stats) failed");
-                        continue;
-                }
-
-                counters->pkts++;
-                counters->bytes += len;
-
+                filter->pkts++;
+                filter->bytes += len;
         }
 
         return XDP_PASS;
