@@ -28,17 +28,17 @@
 #define bpf_debug(fmt, ...) { } while (0)
 #endif
 
-struct bpf_map_def SEC("stats") xnl_rules = {
+struct bpf_map_def SEC("maps") xnl_rules = {
         .type = BPF_MAP_TYPE_ARRAY,
         .key_size = sizeof(__u32),
         .value_size = sizeof(struct xnl_filters),
         .max_entries = 1,
 };
 
-struct bpf_map_def SEC("stats") xnl_counters = {
+struct bpf_map_def SEC("maps") xnl_counters = {
         .type = BPF_MAP_TYPE_PERCPU_ARRAY,
         .key_size = sizeof(__u32),
-        .value_size = sizeof(struct xnl_filter),
+        .value_size = sizeof(struct xnl_counters),
         .max_entries = XNL_MAX_FILTERS,
 };
 
@@ -96,8 +96,12 @@ int xdp_pass (struct xdp_md *ctx)
                 return XDP_PASS;
         }
 
-        for (__u32 i = 0; i < filters->num; i++) {
+#pragma clang loop unroll(full)
+        for (__u8 i = 0; i < XNL_MAX_FILTERS; i++) {
                 struct xnl_filter *filter = &(filters->filters[i]);
+
+                if (i > filters->num-1)
+                        break;
 
                 if (proto != XNL_FILTER_ANY && proto != filter->proto)
                         continue;
@@ -107,6 +111,7 @@ int xdp_pass (struct xdp_md *ctx)
 
                 if (filter->daddr != 0 && iph->daddr != filter->daddr)
                         continue;
+
 
                 if (filter->sport != 0 || filter->dport != 0) {
                         if (iph->protocol == IPPROTO_TCP) {
@@ -128,7 +133,9 @@ int xdp_pass (struct xdp_md *ctx)
                         }
                 }
 
-                struct xnl_counters *counters = bpf_map_lookup_elem(&xnl_counters, &i);
+                int j = i; /* to be able to unroll */
+
+                struct xnl_counters *counters = bpf_map_lookup_elem(&xnl_counters, &j);
 
                 if (!counters) {
                         bpf_debug("bpf_map_lookup_elem(stats) failed");
@@ -137,6 +144,7 @@ int xdp_pass (struct xdp_md *ctx)
 
                 counters->pkts++;
                 counters->bytes += len;
+
         }
 
         return XDP_PASS;
