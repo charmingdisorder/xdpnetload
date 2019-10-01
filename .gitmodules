@@ -1,3 +1,12 @@
 [submodule "libbpf"]
 	path = libbpf
 	url = https://github.com/libbpf/libbpf
+[submodule "libubox"]
+	path = libubox
+	url = https://github.com/git-openwrt-org-mirror/libubox.git
+[submodule "ubus"]
+	path = ubus
+	url = https://github.com/git-openwrt-org-mirror/ubus.git
+[submodule "json-c"]
+	path = json-c
+	url = https://github.com/json-c/json-c.git
