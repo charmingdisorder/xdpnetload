@@ -123,4 +123,5 @@ add_executable(xdpnetload ${SOURCES})
 target_link_libraries(xdpnetload ${LIBS} ${LIBELF_LIBRARIES} ${CMAKE_CURRENT_SOURCE_DIR}/libubox/libubox.a)
 
 target_include_directories(xdpnetload PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libbpf/src/build/usr/include)
+target_include_directories(xdpnetload PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libbpf/include/uapi)
 target_include_directories(xdpnetload PRIVATE ${LIBELF_INCLUDE_DIRS})

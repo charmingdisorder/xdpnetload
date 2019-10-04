@@ -11,6 +11,7 @@
 #include <netinet/in.h>
 
 #include "bpf_helpers.h"
+#include <linux/bpf.h>
 #include "common.h"
 
 char _license[] SEC("license") = "Dual MIT/GPL";
@@ -31,7 +32,7 @@ char _license[] SEC("license") = "Dual MIT/GPL";
 #endif
 
 struct bpf_map_def SEC("maps") xnl_rules = {
-        .type = BPF_MAP_TYPE_PERCPU_ARRAY,
+        .type = BPF_MAP_TYPE_ARRAY,
         .key_size = sizeof(__u32),
 //        .value_size = sizeof(struct xnl_filters),
 //        .max_entries = 1,
@@ -40,14 +41,12 @@ struct bpf_map_def SEC("maps") xnl_rules = {
 
 };
 
-#if 0
 struct bpf_map_def SEC("maps") xnl_counters = {
         .type = BPF_MAP_TYPE_PERCPU_ARRAY,
         .key_size = sizeof(__u32),
         .value_size = sizeof(struct xnl_counters),
         .max_entries = XNL_MAX_FILTERS,
 };
-#endif
 
 SEC("xdp")
 int xdp_pass (struct xdp_md *ctx)
@@ -60,11 +59,9 @@ int xdp_pass (struct xdp_md *ctx)
         __u16 eth_proto;
         __u8 proto;
         __u8 iph_len;
-        //__u32 zero = 0;
 
         struct iphdr *iph;
         struct ethhdr *ehdr;
-//        struct xnl_filters *filters;
 
         len = data_end - data;
         ehdr = (struct ethhdr *)data;
@@ -101,15 +98,6 @@ int xdp_pass (struct xdp_md *ctx)
 
         l4_offset = l3_offset + sizeof(*iph);
 
-#if 0
-        filters = bpf_map_lookup_elem(&xnl_rules, &zero);
-
-        if (!filters) {
-                bpf_debug("bpf_map_lookup_elem(rules) failed");
-                return XDP_PASS;
-        }
-#endif
-
         if (data + l4_offset > data_end) {
                 bpf_debug("l4_offset > data_end");
                 return XDP_PASS; /* XXX */
@@ -123,8 +111,13 @@ int xdp_pass (struct xdp_md *ctx)
                         return XDP_PASS;
                 }
 
+                /*
                 sport = ntohs(hdr->source);
                 dport = ntohs(hdr->dest);
+                */
+
+                sport = hdr->source;
+                dport = hdr->dest;
         } else {
                 /* UDP */
                 struct udphdr *hdr = data + l4_offset;
@@ -134,8 +127,14 @@ int xdp_pass (struct xdp_md *ctx)
                         return XDP_PASS;
                 }
 
+                /*
                 sport = ntohs(hdr->source);
                 dport = ntohs(hdr->dest);
+                */
+
+                sport = ntohs(hdr->source);
+                dport = ntohs(hdr->dest);
+
         }
 
 #pragma clang loop unroll(full)
@@ -166,9 +165,15 @@ int xdp_pass (struct xdp_md *ctx)
                 if (filter->dport != 0 && dport != filter->dport)
                         continue;
 
+                struct xnl_counters *counters = bpf_map_lookup_elem(&xnl_counters, &j);
 
-                filter->pkts++;
-                filter->bytes += len;
+                if (!counters) {
+                        bpf_debug("bpf_map_lookup_elem(xnl_counters)");
+                        return XDP_PASS;
+                }
+
+                counters->pkts++;
+                counters->bytes += len;
         }
 
         return XDP_PASS;

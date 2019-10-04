@@ -4,18 +4,16 @@
 #include <linux/types.h>
 
 #define XNL_MAX_FILTERS 5
+#define XDP_PROG_NAME "xnl_kernel.o"
 
 enum {
-        XNL_FILTER_UDP = 0,
+        XNL_FILTER_ANY = 0,
+        XNL_FILTER_UDP,
         XNL_FILTER_TCP,
-        XNL_FILTER_ANY
 };
 
 /* xnl_filter describes filtering rule */
 struct xnl_filter {
-        __u64 pkts;
-        __u64 bytes;
-
         __u32 saddr;
         __u32 daddr;
 
@@ -26,14 +24,6 @@ struct xnl_filter {
         __u8 is_set;
 };
 
-#if 0
-struct xnl_filters {
-        struct xnl_filter filters[XNL_MAX_FILTERS];
-
-        __u64 started;      /* Time started */
-        __u8 num;           /* Number of filtering rules */
-};
-
 /*
  * xnl_counters accumulates statistics regarding network traffic
  * related to defined rules
@@ -41,6 +31,14 @@ struct xnl_filters {
 struct xnl_counters {
         __u64 pkts;
         __u64 bytes;
+};
+
+#if 0
+struct xnl_filters {
+        struct xnl_filter filters[XNL_MAX_FILTERS];
+
+        __u64 started;      /* Time started */
+        __u8 num;           /* Number of filtering rules */
 };
 #endif
 
