@@ -97,7 +97,10 @@ target_include_directories(bpf PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libbpf/includ
 target_include_directories(bpf PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libbpf/include/uapi)
 target_include_directories(bpf PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libbpf/include)
 
-set(BUILD_EXAMPLES OFF)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Disable shared libs")
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/json-c)
+
+#set(BUILD_EXAMPLES OFF)
 set(BUILD_STATIC ON)
 set(CMAKE_STATIC_LIBRARY_PREFIX "")
 
@@ -112,15 +115,19 @@ add_definitions(-DUBUS_MAX_MSGLEN=${UBUS_MAX_MSGLEN})
 add_library(ubus STATIC ${CMAKE_CURRENT_SOURCE_DIR}/ubus/libubus.c ${CMAKE_CURRENT_SOURCE_DIR}/ubus/libubus-io.c ${CMAKE_CURRENT_SOURCE_DIR}/ubus/libubus-obj.c ${CMAKE_CURRENT_SOURCE_DIR}/ubus/libubus-sub.c ${CMAKE_CURRENT_SOURCE_DIR}/ubus/libubus-req.c ${CMAKE_CURRENT_SOURCE_DIR}/ubus/libubus-acl.c)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/ubus)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libubox)
 
 set(SOURCES xdpnetload.c)
 
-set(LIBS ubus bpf)
+set(LIBS ubus bpf blobmsg_json-static ubox-static)
 
 add_custom_target(install_bpf_headers DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/libbpf/src/build")
 
 add_executable(xdpnetload ${SOURCES})
-target_link_libraries(xdpnetload ${LIBS} ${LIBELF_LIBRARIES} ${CMAKE_CURRENT_SOURCE_DIR}/libubox/libubox.a)
+#target_link_libraries(xdpnetload ${LIBS} ${LIBELF_LIBRARIES} ${CMAKE_CURRENT_BINARY_DIR}/libubox/ubox.a ${CMAKE_C#URRENT_BINARY_DIR}/libubox/blobmsg_json.a ${CMAKE_CURRENT_BINARY_DIR}/json-c/libjson-c.a)
+#target_link_libraries(xdpnetload ${LIBS} ${LIBELF_LIBRARIES} ${CMAKE_CURRENT_BINARY_DIR}/libubox/ubox.a)
+#target_link_libraries(xdpnetload ${LIBS} ${LIBELF_LIBRARIES} blobmsg_json-static ubox-static)
+target_link_libraries(xdpnetload ${LIBS} ${LIBELF_LIBRARIES})
 
 target_include_directories(xdpnetload PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libbpf/src/build/usr/include)
 target_include_directories(xdpnetload PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libbpf/include/uapi)

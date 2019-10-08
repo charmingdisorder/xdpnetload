@@ -111,11 +111,6 @@ int xdp_pass (struct xdp_md *ctx)
                         return XDP_PASS;
                 }
 
-                /*
-                sport = ntohs(hdr->source);
-                dport = ntohs(hdr->dest);
-                */
-
                 sport = hdr->source;
                 dport = hdr->dest;
         } else {
@@ -126,11 +121,6 @@ int xdp_pass (struct xdp_md *ctx)
                         bpf_debug("l4_offset check");
                         return XDP_PASS;
                 }
-
-                /*
-                sport = ntohs(hdr->source);
-                dport = ntohs(hdr->dest);
-                */
 
                 sport = ntohs(hdr->source);
                 dport = ntohs(hdr->dest);
@@ -144,11 +134,17 @@ int xdp_pass (struct xdp_md *ctx)
                 struct xnl_filter *filter = bpf_map_lookup_elem(&xnl_rules, &j);
 
                 if (!filter) {
-                        bpf_debug("bpf_map_lookup_elem(xnl_rules)");
+                        bpf_debug("!!!error range for filter\n");
                         return XDP_PASS;
                 }
 
-                if (filter->is_set == 0) break;
+                if (filter->is_set == 0) {
+                        /* bpf_debug("bpf_map_lookup_elem(xnl_rules)"); */
+                        return XDP_PASS;
+                }
+
+                bpf_debug("filter %u: proto = %u addr=%u\n",
+                          j, filter->proto, filter->daddr);
 
                 if (proto != XNL_FILTER_ANY && proto != filter->proto)
                         continue;
