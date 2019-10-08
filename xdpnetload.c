@@ -369,7 +369,6 @@ static inline unsigned long long monotime(void) {
 static void report_stats(struct uloop_timeout *t)
 {
         (void) t;
-        static struct blob_buf b;
         unsigned int i, j;
         unsigned long long now;
 
@@ -434,6 +433,7 @@ static void report_stats(struct uloop_timeout *t)
                         blobmsg_add_double(&blob_buf, "max_mbps", (double)stats[i].max_bps / 1000000.0);
                         blobmsg_close_table(&blob_buf, tbl);
 
+                        ubus_send_event(ubus_ctx, "xdpnetload", blob_buf.head);
                 } else {
                         stats[i].started = stats[i].reported = now;
                         stats[i].bytes = bytes;
@@ -443,7 +443,6 @@ static void report_stats(struct uloop_timeout *t)
                 }
         }
 
-        ubus_send_event(ubus_ctx, "xdpnetload", blob_buf.head);
 
         uloop_timeout_set(&report_timer, report_interval);
 
