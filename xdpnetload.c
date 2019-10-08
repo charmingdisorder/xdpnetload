@@ -371,6 +371,7 @@ static void report_stats(struct uloop_timeout *t)
         (void) t;
         unsigned int i, j;
         unsigned long long now;
+        int to_send = 0;
 
         struct xnl_counters counters [nr_cpus];
 
@@ -433,7 +434,7 @@ static void report_stats(struct uloop_timeout *t)
                         blobmsg_add_double(&blob_buf, "max_mbps", (double)stats[i].max_bps / 1000000.0);
                         blobmsg_close_table(&blob_buf, tbl);
 
-                        ubus_send_event(ubus_ctx, "xdpnetload", blob_buf.head);
+                        to_send = 1;
                 } else {
                         stats[i].started = stats[i].reported = now;
                         stats[i].bytes = bytes;
@@ -443,6 +444,8 @@ static void report_stats(struct uloop_timeout *t)
                 }
         }
 
+        if (to_send)
+                ubus_send_event(ubus_ctx, "xdpnetload", blob_buf.head);
 
         uloop_timeout_set(&report_timer, report_interval);
 
