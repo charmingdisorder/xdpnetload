@@ -87,8 +87,8 @@ add_library(bpf STATIC ${libbpf_sources})
 set_target_properties(bpf PROPERTIES OUTPUT_NAME bpf)
 
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/libbpf/src/build"
-  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/libbpf/src"
+  OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/libbpf/src/build"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/libbpf/src"
   COMMAND make DESTDIR=build install_headers
   )
 
@@ -119,11 +119,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libubox)
 
 set(SOURCES xdpnetload.c)
 
-set(LIBS ubus bpf blobmsg_json-static ubox-static)
+set(LIBS ubus bpf blobmsg_json-static ubox-static json-c)
 
-add_custom_target(install_bpf_headers DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/libbpf/src/build")
+add_custom_target(install_bpf_headers DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/libbpf/src/build")
 
-add_executable(xdpnetload ${SOURCES})
+add_executable(xdpnetload ${SOURCES} )
+
+add_dependencies(xdpnetload install_bpf_headers)
+
 #target_link_libraries(xdpnetload ${LIBS} ${LIBELF_LIBRARIES} ${CMAKE_CURRENT_BINARY_DIR}/libubox/ubox.a ${CMAKE_C#URRENT_BINARY_DIR}/libubox/blobmsg_json.a ${CMAKE_CURRENT_BINARY_DIR}/json-c/libjson-c.a)
 #target_link_libraries(xdpnetload ${LIBS} ${LIBELF_LIBRARIES} ${CMAKE_CURRENT_BINARY_DIR}/libubox/ubox.a)
 #target_link_libraries(xdpnetload ${LIBS} ${LIBELF_LIBRARIES} blobmsg_json-static ubox-static)
