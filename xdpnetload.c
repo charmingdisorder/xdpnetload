@@ -315,11 +315,9 @@ void calc_bandwidth(struct uloop_timeout *t)
         (void)t;
         unsigned int i, j;
         struct xnl_counters counters [nr_cpus];
-        void *arr;
 
         for (i=0; i<num_filters; i++) {
                 __u64 bytes = 0;
-                void *tbl;
 
                 if (bpf_map_lookup_elem(counters_map_fd, &i, counters) != 0) {
                         fprintf(stderr, "%s: bpf_map_lookup_elem() failed\n", __func__);
@@ -426,6 +424,7 @@ static void report_stats(struct uloop_timeout *t)
 
                         tbl = blobmsg_open_table(&blob_buf, NULL);
                         blobmsg_add_u32(&blob_buf, "id", i);
+                        blobmsg_add_u64(&blob_buf, "time", now);
                         blobmsg_add_u64(&blob_buf, "bytes", bytes);
                         blobmsg_add_u64(&blob_buf, "pkts", pkts);
                         blobmsg_add_double(&blob_buf, "total_mbps", (double)total_bps / 1000000.0);
@@ -516,6 +515,46 @@ static void sig_handler(int sig)
         uloop_end();
         return;
 }
+static int
+status_handler(struct ubus_context *ctx, struct ubus_object *obj,
+               struct ubus_request_data *req, const char *method,
+               struct blob_attr *msg)
+{
+        (void)(obj);
+        (void)(method);
+        (void)(msg);
+
+        unsigned int i;
+        char buf[8];
+
+        blob_buf_init(&blob_buf, 0);
+
+        blobmsg_add_u64(&blob_buf, "interval", report_interval);
+        blobmsg_add_u32(&blob_buf, "num_filters", num_filters);
+
+        for (i=0; i<num_filters; i++) {
+                snprintf(buf, sizeof(buf), "rule.%u", i);
+                blobmsg_add_string(&blob_buf, buf, print_filter(&filters[i]));
+        }
+
+        ubus_send_reply(ctx, req, blob_buf.head);
+
+        return 0;
+}
+
+
+static const struct ubus_method xnl_methods[] = {
+        { .name = "status" , .handler = status_handler } ,
+};
+
+static struct ubus_object_type xnl_obj_type = UBUS_OBJECT_TYPE("xdpnetload", xnl_methods);
+
+static struct ubus_object xnl_object = {
+    .name = "xdpnetload",
+    .type = &xnl_obj_type ,
+    .methods = xnl_methods,
+    .n_methods = ARRAY_SIZE(xnl_methods),
+};
 
 int main(int argc, char **argv)
 {
@@ -648,11 +687,10 @@ int main(int argc, char **argv)
 
         signal(SIGINT, sig_handler);
         signal(SIGTERM, sig_handler);
+        signal(SIGPIPE, SIG_IGN);
 
         bandwidth_timer.cb = calc_bandwidth;
         report_timer.cb = report_stats;
-
-        vprint("Entering mainloop\n");
 
         uloop_init();
 #if 0
@@ -660,12 +698,26 @@ int main(int argc, char **argv)
 #endif
         uloop_timeout_set(&report_timer, report_interval);
 
+        ubus_add_uloop(ubus_ctx);
+
+        if (ubus_add_object(ubus_ctx, &xnl_object)) {
+                fprintf(stderr, "%s: ubus_add_object() failed\n", PROG_NAME);
+                goto err;
+
+        }
+
+        vprint("Entering mainloop\n");
         uloop_run();
 
+        ubus_free(ubus_ctx);
         uloop_done();
 
         exit(EXIT_SUCCESS);
 err:
         sig_handler(0);
+
+        if (ubus_ctx)
+                ubus_free(ubus_ctx);
+
         exit(EXIT_FAILURE);
 }
